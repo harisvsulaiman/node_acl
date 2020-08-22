@@ -1,9 +1,9 @@
-const { MongoClient } = require("mongodb");
-const { assert } = require("chai");
-const _ = require("lodash");
+import { MongoClient } from "mongodb";
+import { assert } from "chai";
+import _ from "lodash";
 require("dotenv").config();
 
-const Acl = require("../");
+import { Acl, MongoDBBackend } from "../lib";
 const DB = "acltest";
 const MONGO_URL = process.env.MONGO_URL;
 
@@ -19,7 +19,7 @@ beforeAll(async () => {
   db = await connection.db(DB);
 
   await db.dropDatabase();
-  backend = new Acl.mongodbBackend(db, "acl");
+  backend = new MongoDBBackend(db, "acl");
 });
 
 afterAll(async () => {

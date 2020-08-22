@@ -5,3 +5,6 @@ node_modules/*
 .idea/
 .tags*
 .env
+build
+dist
+globalConfig.json
