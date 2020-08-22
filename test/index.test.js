@@ -497,7 +497,6 @@ describe("whatResources queries", async () => {
 
     let resources = await acl.whatResources("bar");
 
-    assert.isNull(err);
     assert.include(resources.blogs, "view");
     assert.include(resources.blogs, "delete");
   });
@@ -750,7 +749,6 @@ describe("allowedPermissions", async () => {
     let acl = new Acl(backend);
     let permissions = await acl.allowedPermissions("james", "blogs");
 
-    assert.isNull(err);
     assert.property(permissions, "blogs");
     assert(permissions.blogs.length === 0);
   });
@@ -811,13 +809,13 @@ describe("Were roles removed?", async () => {
 
     assert.isObject(permissions);
     assert(permissions.forums.length === 0);
+  });
 
-    it("What permissions has userId=2 over forums and blogs?", async () => {
-      let acl = new Acl(backend);
-      let permissions = await acl.allowedPermissions(2, ["forums", "blogs"]);
-      assert.isObject(permissions);
-      assert(permissions.forums.length === 0);
-    });
+  it("What permissions has userId=2 over forums and blogs?", async () => {
+    let acl = new Acl(backend);
+    let permissions = await acl.allowedPermissions(2, ["forums", "blogs"]);
+    assert.isObject(permissions);
+    assert(permissions.forums.length === 0);
   });
 });
 
@@ -891,7 +889,6 @@ describe('Github issue #32: Removing a role removes the entire "allows" document
     let acl = new Acl(backend);
 
     await acl.removeRole("role1");
-    assert(!err);
 
     let res = await acl.whatResources("role1");
     assert(Object.keys(res).length === 0);
