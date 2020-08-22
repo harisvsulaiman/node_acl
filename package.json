@@ -27,6 +27,7 @@
     "jest": "^26.4.1"
   },
   "scripts": {
-    "test": "jest"
+    "test": "jest",
+    "coverage": "jest --coverage"
   }
 }

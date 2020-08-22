@@ -26,7 +26,7 @@ afterAll(async () => {
   connection.close();
 });
 
-describe("constructor", async () => {
+describe("constructor", () => {
   it("should use default `buckets` names", () => {
     let acl = new Acl(backend);
 
@@ -59,7 +59,7 @@ describe("constructor", async () => {
   });
 });
 
-describe("allow", async () => {
+describe("allow", () => {
   it("guest to view blogs", async () => {
     let acl = new Acl(backend);
 
@@ -79,7 +79,7 @@ describe("allow", async () => {
   });
 });
 
-describe("Add user roles", async () => {
+describe("Add user roles", () => {
   it("joed => guest, jsmith => member, harry => admin, test@test.com => member", async () => {
     let acl = new Acl(backend);
 
@@ -98,7 +98,7 @@ describe("Add user roles", async () => {
   });
 });
 
-describe("read User Roles", async () => {
+describe("read User Roles", () => {
   it("run userRoles function", async () => {
     let acl = new Acl(backend);
     await acl.addUserRoles("harry", "admin");
@@ -113,7 +113,7 @@ describe("read User Roles", async () => {
   });
 });
 
-describe("read Role Users", async () => {
+describe("read Role Users", () => {
   it("run roleUsers function", async () => {
     let acl = new Acl(backend);
     await acl.addUserRoles("harry", "admin");
@@ -124,7 +124,7 @@ describe("read Role Users", async () => {
   });
 });
 
-describe("allow", async () => {
+describe("allow", () => {
   it("admin view/add/edit/delete users", async () => {
     let acl = new Acl(backend);
 
@@ -144,7 +144,7 @@ describe("allow", async () => {
   });
 });
 
-describe("add role parents", async () => {
+describe("add role parents", () => {
   it("add them", async () => {
     let acl = new Acl(backend);
 
@@ -152,7 +152,7 @@ describe("add role parents", async () => {
   });
 });
 
-describe("add user roles", async () => {
+describe("add user roles", () => {
   it("add them", async () => {
     let acl = new Acl(backend);
 
@@ -166,7 +166,7 @@ describe("add user roles", async () => {
   });
 });
 
-describe("allow admin to do anything", async () => {
+describe("allow admin to do anything", () => {
   it("add them", async () => {
     let acl = new Acl(backend);
 
@@ -174,7 +174,7 @@ describe("allow admin to do anything", async () => {
   });
 });
 
-describe("Arguments in one array", async () => {
+describe("Arguments in one array", () => {
   it("give role fumanchu an array of resources and permissions", async () => {
     let acl = new Acl(backend);
 
@@ -197,7 +197,7 @@ describe("Arguments in one array", async () => {
   });
 });
 
-describe("Add fumanchu role to suzanne", async () => {
+describe("Add fumanchu role to suzanne", () => {
   it("do it", async () => {
     let acl = new Acl(backend);
     await acl.addUserRoles("suzanne", "fumanchu");
@@ -208,8 +208,8 @@ describe("Add fumanchu role to suzanne", async () => {
   });
 });
 
-describe("Allowance queries", async () => {
-  describe("isAllowed", async () => {
+describe("Allowance queries", () => {
+  describe("isAllowed", () => {
     it("Can joed view blogs?", async () => {
       let acl = new Acl(backend);
 
@@ -447,7 +447,7 @@ describe("Allowance queries", async () => {
     });
   });
 
-  describe("allowedPermissions", async () => {
+  describe("allowedPermissions", () => {
     it("What permissions has james over blogs and forums?", async () => {
       let acl = new Acl(backend);
       let permissions = await acl.allowedPermissions("james", [
@@ -491,7 +491,7 @@ describe("Allowance queries", async () => {
   });
 });
 
-describe("whatResources queries", async () => {
+describe("whatResources queries", () => {
   it('What resources have "bar" some rights on?', async () => {
     let acl = new Acl(backend);
 
@@ -539,7 +539,7 @@ describe("whatResources queries", async () => {
   });
 });
 
-describe("removeAllow", async () => {
+describe("removeAllow", () => {
   it("Remove get permissions from resources blogs and forums from role fumanchu", async () => {
     let acl = new Acl(backend);
     await acl.removeAllow("fumanchu", ["blogs", "forums"], "get");
@@ -556,7 +556,7 @@ describe("removeAllow", async () => {
   });
 });
 
-describe("See if permissions were removed", async () => {
+describe("See if permissions were removed", () => {
   it('What resources have "fumanchu" some rights on after removed some of them?', async () => {
     let acl = new Acl(backend);
     let resources = await acl.whatResources("fumanchu");
@@ -573,7 +573,7 @@ describe("See if permissions were removed", async () => {
   });
 });
 
-describe("removeRole", async () => {
+describe("removeRole", () => {
   it("Remove role fumanchu", async () => {
     let acl = new Acl(backend);
     await acl.removeRole("fumanchu");
@@ -590,7 +590,7 @@ describe("removeRole", async () => {
   });
 });
 
-describe("Was role removed?", async () => {
+describe("Was role removed?", () => {
   it('What resources have "fumanchu" some rights on after removed?', async () => {
     let acl = new Acl(backend);
     let resources = await acl.whatResources("fumanchu");
@@ -605,7 +605,7 @@ describe("Was role removed?", async () => {
     assert(Object.keys(resources).length === 0);
   });
 
-  describe("allowed permissions", async () => {
+  describe("allowed permissions", () => {
     it("What permissions has jsmith over blogs and forums?", async () => {
       let acl = new Acl(backend);
       let permissions = await acl.allowedPermissions("jsmith", [
@@ -638,7 +638,7 @@ describe("Was role removed?", async () => {
   });
 });
 
-describe("RoleParentRemoval", async () => {
+describe("RoleParentRemoval", () => {
   beforeAll(async () => {
     let acl = new Acl(backend);
     await acl.allow("parent1", "x", "read1");
@@ -732,7 +732,7 @@ describe("RoleParentRemoval", async () => {
   });
 });
 
-describe("removeResource", async () => {
+describe("removeResource", () => {
   it("Remove resource blogs", async () => {
     let acl = new Acl(backend);
     await acl.removeResource("blogs");
@@ -744,7 +744,7 @@ describe("removeResource", async () => {
   });
 });
 
-describe("allowedPermissions", async () => {
+describe("allowedPermissions", () => {
   it("What permissions has james over blogs?", async () => {
     let acl = new Acl(backend);
     let permissions = await acl.allowedPermissions("james", "blogs");
@@ -761,7 +761,7 @@ describe("allowedPermissions", async () => {
   });
 });
 
-describe("whatResources", async () => {
+describe("whatResources", () => {
   it('What resources have "baz" some rights on after removed blogs?', async () => {
     let acl = new Acl(backend);
     let resources = await acl.whatResources("baz");
@@ -778,7 +778,7 @@ describe("whatResources", async () => {
   });
 });
 
-describe("Remove user roles", async () => {
+describe("Remove user roles", () => {
   it("Remove role guest from joed", async () => {
     let acl = new Acl(backend);
     await acl.removeUserRoles("joed", "guest");
@@ -799,7 +799,7 @@ describe("Remove user roles", async () => {
   });
 });
 
-describe("Were roles removed?", async () => {
+describe("Were roles removed?", () => {
   it("What permissions has harry over forums and blogs?", async () => {
     let acl = new Acl(backend);
     let permissions = await acl.allowedPermissions("harry", [
@@ -819,7 +819,7 @@ describe("Were roles removed?", async () => {
   });
 });
 
-describe("Github issue #55: removeAllow is removing all permissions.", async () => {
+describe("Github issue #55: removeAllow is removing all permissions.", () => {
   it("Add roles/resources/permissions", async () => {
     let acl = new Acl(backend);
 
@@ -844,7 +844,7 @@ describe("Github issue #55: removeAllow is removing all permissions.", async () 
   });
 });
 
-describe('Github issue #32: Removing a role removes the entire "allows" document.', async () => {
+describe('Github issue #32: Removing a role removes the entire "allows" document.', () => {
   it("Add roles/resources/permissions", async () => {
     let acl = new Acl(backend);
 
