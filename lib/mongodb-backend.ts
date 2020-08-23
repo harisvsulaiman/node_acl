@@ -45,7 +45,7 @@ export class MongoDBBackend implements Backend {
     // await session.withTransaction(async () => {})
 
     // contract(arguments).params("array", "function").end();
-    await Promise.all(transaction);
+    await Promise.all(transaction.map(async (t) => await t()));
   }
 
   /**
@@ -177,7 +177,7 @@ export class MongoDBBackend implements Backend {
               { upsert: true },
               (err) => {
                 if (err instanceof Error) return reject(err);
-                resolve(undefined);
+                resolve();
               }
             );
           }

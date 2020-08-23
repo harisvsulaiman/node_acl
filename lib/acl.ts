@@ -31,7 +31,6 @@
 */
 import bluebird from "bluebird";
 import _ from "lodash";
-import util from "util";
 import Backend from "./backend";
 
 type Options = {
@@ -103,14 +102,16 @@ export class Acl {
     );
 
     if (Array.isArray(roles)) {
-      roles.forEach(async (role) => {
-        await this.backend.add(
-          transaction,
-          this.options.buckets.roles,
-          role,
-          userId
-        );
-      });
+      await Promise.all(
+        roles.map(async (role) => {
+          await this.backend.add(
+            transaction,
+            this.options.buckets.roles,
+            role,
+            userId
+          );
+        })
+      );
     } else {
       await this.backend.add(
         transaction,
@@ -497,17 +498,16 @@ export class Acl {
     resources = makeArray(resources);
 
     let roles = await this.userRoles(userId);
-    let result = {};
+    let result: any = {};
 
-    return await bluebird.all(
-      resources.map((resource) => {
-        return this._resourcePermissions(roles, resource).then(
-          (permissions) => {
-            result[resource] = permissions;
-          }
-        );
+    await Promise.all(
+      resources.map(async (resource) => {
+        let permissions = await this._resourcePermissions(roles, resource);
+        result[resource] = permissions;
       })
     );
+
+    return result;
   }
 
   /**
@@ -622,13 +622,6 @@ export class Acl {
     roles: Roles | Role,
     permissions?: Permissions | Permission
   ) {
-    // contract(arguments)
-    //   .params("string|array")
-    //   .params("string|array", "string|array")
-    //   .params("string|array", "function")
-    //   .params("string|array", "string|array", "function")
-    //   .end();
-
     roles = makeArray(roles);
     // TODO: Accept permissions as functions
     // if (_.isFunction(permissions)) {
@@ -643,25 +636,33 @@ export class Acl {
   }
 
   async permittedResources(roles, permissions) {
-    const result = _.isUndefined(permissions) ? {} : [];
-    let resources = await this._rolesResources(roles);
+    const result: any = _.isUndefined(permissions) ? {} : [];
+    let resources: Resources = await this._rolesResources(roles);
 
-    return await bluebird.all(
-      resources.map((resource) => {
-        return this._resourcePermissions(roles, resource).then((p) => {
-          if (permissions) {
-            const commonPermissions = _.intersection(permissions, p);
-            if (commonPermissions.length > 0) {
-              // TODO: Add test case
-              //@ts-ignore Property 'push' does not exist on type '{}'.ts(2339)
-              result.push(resource);
-            }
-          } else {
-            result[resource] = p;
+    await Promise.all(
+      resources.map(async (resource) => {
+        let resourcePermissions = await this._resourcePermissions(
+          roles,
+          resource
+        );
+
+        if (permissions) {
+          const commonPermissions = _.intersection(
+            permissions,
+            resourcePermissions
+          );
+          if (commonPermissions.length > 0) {
+            // TODO: Add test case
+            //@ts-ignore Property 'push' does not exist on type '{}'.ts(2339)
+            result.push(resource);
           }
-        });
+        } else {
+          result[resource] = resourcePermissions;
+        }
       })
     );
+
+    return result;
   }
 
   //-----------------------------------------------------------------------------
