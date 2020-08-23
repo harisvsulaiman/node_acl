@@ -48,6 +48,10 @@ type Options = {
 type UserID = string | number;
 type Role = string;
 type Roles = Array<Role>;
+type Permission = string;
+type Permissions = Array<Permission>;
+type Resource = string;
+type Resources = Array<Resource>;
 
 export class Acl {
   backend: Backend;
@@ -55,12 +59,6 @@ export class Acl {
   logger: any = null;
 
   constructor(backend: Backend, logger?: any, options?: Options) {
-    // contract(arguments)
-    //   .params("object")
-    //   .params("object", "object")
-    //   .params("object", "object", "object")
-    //   .end();
-
     options = {
       buckets: {
         meta: "meta",
@@ -88,23 +86,38 @@ export class Acl {
     @param {Function} Callback called when finished.
     @return {Promise} Promise resolved when finished
   */
-  async addUserRoles(userId: UserID, roles: Roles) {
-    // contract(arguments)
-    //   .params("string|number", "string|array", "function")
-    //   .params("string|number", "string|array")
-    //   .end();
-
+  async addUserRoles(userId: UserID, roles: Roles | Role) {
     const transaction = await this.backend.begin();
 
-    this.backend.add(transaction, this.options.buckets.meta, "users", userId);
-    this.backend.add(transaction, this.options.buckets.users, userId, roles);
+    await this.backend.add(
+      transaction,
+      this.options.buckets.meta,
+      "users",
+      userId
+    );
+    await this.backend.add(
+      transaction,
+      this.options.buckets.users,
+      userId,
+      roles
+    );
 
     if (Array.isArray(roles)) {
-      roles.forEach((role) => {
-        this.backend.add(transaction, this.options.buckets.roles, role, userId);
+      roles.forEach(async (role) => {
+        await this.backend.add(
+          transaction,
+          this.options.buckets.roles,
+          role,
+          userId
+        );
       });
     } else {
-      this.backend.add(transaction, this.options.buckets.roles, roles, userId);
+      await this.backend.add(
+        transaction,
+        this.options.buckets.roles,
+        roles,
+        userId
+      );
     }
 
     return await this.backend.end(transaction);
@@ -120,18 +133,23 @@ export class Acl {
     @param {Function} Callback called when finished.
     @return {Promise} Promise resolved when finished
   */
-  async removeUserRoles(userId: UserID, roles: Roles) {
+  async removeUserRoles(userId: UserID, roles: Roles | Role) {
     // contract(arguments)
     //   .params("string|number", "string|array", "function")
     //   .params("string|number", "string|array")
     //   .end();
 
-    const transaction = this.backend.begin();
-    this.backend.remove(transaction, this.options.buckets.users, userId, roles);
+    const transaction = await this.backend.begin();
+    await this.backend.remove(
+      transaction,
+      this.options.buckets.users,
+      userId,
+      roles
+    );
 
     if (Array.isArray(roles)) {
-      roles.forEach((role) => {
-        this.backend.remove(
+      roles.forEach(async (role) => {
+        await this.backend.remove(
           transaction,
           this.options.buckets.roles,
           role,
@@ -139,7 +157,7 @@ export class Acl {
         );
       });
     } else {
-      this.backend.remove(
+      await this.backend.remove(
         transaction,
         this.options.buckets.roles,
         roles,
@@ -206,9 +224,20 @@ export class Acl {
     //   .params("string|number", "string|array")
     //   .end();
 
-    const transaction = this.backend.begin();
-    this.backend.add(transaction, this.options.buckets.meta, "roles", role);
-    this.backend.add(transaction, this.options.buckets.parents, role, parents);
+    const transaction = await this.backend.begin();
+    await this.backend.add(
+      transaction,
+      this.options.buckets.meta,
+      "roles",
+      role
+    );
+
+    await this.backend.add(
+      transaction,
+      this.options.buckets.parents,
+      role,
+      parents
+    );
     return await this.backend.end(transaction);
   }
 
@@ -257,32 +286,31 @@ export class Acl {
   async removeRole(role) {
     // contract(arguments).params("string", "function").params("string").end();
 
-    const _this = this;
     // Note that this is not fully transactional.
-    return this.backend
-      .getAsync(this.options.buckets.resources, role)
-      .then((resources) => {
-        const transaction = _this.backend.begin();
+    let resources = await this.backend.get(
+      this.options.buckets.resources,
+      role
+    );
+    const transaction = await this.backend.begin();
 
-        resources.forEach((resource) => {
-          const bucket = allowsBucket(resource);
-          _this.backend.del(transaction, bucket, role);
-        });
+    resources.forEach(async (resource) => {
+      const bucket = allowsBucket(resource);
+      await this.backend.del(transaction, bucket, role);
+    });
 
-        _this.backend.del(transaction, _this.options.buckets.resources, role);
-        _this.backend.del(transaction, _this.options.buckets.parents, role);
-        _this.backend.del(transaction, _this.options.buckets.roles, role);
-        _this.backend.remove(
-          transaction,
-          _this.options.buckets.meta,
-          "roles",
-          role
-        );
+    await this.backend.del(transaction, this.options.buckets.resources, role);
+    await this.backend.del(transaction, this.options.buckets.parents, role);
+    await this.backend.del(transaction, this.options.buckets.roles, role);
+    await this.backend.remove(
+      transaction,
+      this.options.buckets.meta,
+      "roles",
+      role
+    );
 
-        // `users` collection keeps the removed role
-        // because we don't know what users have `role` assigned.
-        return _this.backend.end(transaction);
-      });
+    // `users` collection keeps the removed role
+    // because we don't know what users have `role` assigned.
+    return await this.backend.end(transaction);
   }
 
   /**
@@ -294,25 +322,23 @@ export class Acl {
     @param {Function} Callback called when finished.
     @return {Promise} Promise resolved when finished
   */
-  removeResource(resource) {
+  async removeResource(resource) {
     // contract(arguments).params("string", "function").params("string").end();
 
-    const _this = this;
-    return this.backend
-      .getAsync(this.options.buckets.meta, "roles")
-      .then((roles) => {
-        const transaction = _this.backend.begin();
-        _this.backend.del(transaction, allowsBucket(resource), roles);
-        roles.forEach((role) => {
-          _this.backend.remove(
-            transaction,
-            _this.options.buckets.resources,
-            role,
-            resource
-          );
-        });
-        return _this.backend.end(transaction);
-      });
+    let roles = await this.backend.get(this.options.buckets.meta, "roles");
+
+    const transaction = await this.backend.begin();
+    await this.backend.del(transaction, allowsBucket(resource), roles);
+
+    roles.forEach(async (role) => {
+      await this.backend.remove(
+        transaction,
+        this.options.buckets.resources,
+        role,
+        resource
+      );
+    });
+    return await this.backend.end(transaction);
   }
 
   /**
@@ -334,7 +360,8 @@ export class Acl {
     @param {Function} Callback called when finished.
     @return {Promise} Promise resolved when finished
   */
-  allow(roles, resources, permissions) {
+
+  async allow(roles, resources, permissions) {
     // contract(arguments)
     //   .params("string|array", "string|array", "string|array", "function")
     //   .params("string|array", "string|array", "string|array")
@@ -342,29 +369,29 @@ export class Acl {
     //   .params("array")
     //   .end();
 
+    // TODO: handle this case
     if (
-      arguments.length == 1 ||
-      (arguments.length === 2 && _.isObject(roles) && _.isFunction(resources))
+      false
+      // arguments.length == 1 ||
+      // (arguments.length === 2 && _.isObject(roles) && _.isFunction(resources))
     ) {
-      return this._allowEx(roles).nodeify(resources);
+      // return this._allowEx(roles).nodeify(resources);
     } else {
-      const _this = this;
-
       roles = makeArray(roles);
       resources = makeArray(resources);
 
-      const transaction = _this.backend.begin();
+      const transaction = await this.backend.begin();
 
-      _this.backend.add(
+      await this.backend.add(
         transaction,
-        _this.options.buckets.meta,
+        this.options.buckets.meta,
         "roles",
         roles
       );
 
-      resources.forEach((resource) => {
-        roles.forEach((role) => {
-          _this.backend.add(
+      resources.forEach(async (resource) => {
+        roles.forEach(async (role) => {
+          await this.backend.add(
             transaction,
             allowsBucket(resource),
             role,
@@ -373,28 +400,22 @@ export class Acl {
         });
       });
 
-      roles.forEach((role) => {
-        _this.backend.add(
+      roles.forEach(async (role) => {
+        await this.backend.add(
           transaction,
-          _this.options.buckets.resources,
+          this.options.buckets.resources,
           role,
           resources
         );
       });
 
-      return _this.backend.end(transaction);
+      return await this.backend.end(transaction);
     }
   }
 
-  removeAllow(role, resources, permissions, cb) {
-    // contract(arguments)
-    //   .params("string", "string|array", "string|array", "function")
-    //   .params("string", "string|array", "string|array")
-    //   .params("string", "string|array", "function")
-    //   .params("string", "string|array")
-    //   .end();
+  async removeAllow(role, resources, permissions) {
     resources = makeArray(resources);
-    return this.removePermissions(role, resources, permissions);
+    return await this.removePermissions(role, resources, permissions);
   }
 
   /**
@@ -408,19 +429,18 @@ export class Acl {
     @param {String|Array}
     @param {String|Array}
   */
-  removePermissions(role, resources, permissions) {
-    const _this = this;
-
-    const transaction = _this.backend.begin();
-    resources.forEach((resource) => {
+  async removePermissions(role, resources, permissions) {
+    const transaction = await this.backend.begin();
+    resources.forEach(async (resource) => {
       const bucket = allowsBucket(resource);
+
       if (permissions) {
-        _this.backend.remove(transaction, bucket, role, permissions);
+        await this.backend.remove(transaction, bucket, role, permissions);
       } else {
-        _this.backend.del(transaction, bucket, role);
-        _this.backend.remove(
+        await this.backend.del(transaction, bucket, role);
+        await this.backend.remove(
           transaction,
-          _this.options.buckets.resources,
+          this.options.buckets.resources,
           role,
           resource
         );
@@ -429,28 +449,24 @@ export class Acl {
 
     // Remove resource from role if no rights for that role exists.
     // Not fully atomic...
-    return _this.backend.end(transaction).then(() => {
-      const transaction = _this.backend.begin();
-      return bluebird
-        .all(
-          resources.map((resource) => {
-            const bucket = allowsBucket(resource);
-            return _this.backend.get(bucket, role).then(({ length }) => {
-              if (length == 0) {
-                _this.backend.remove(
-                  transaction,
-                  _this.options.buckets.resources,
-                  role,
-                  resource
-                );
-              }
-            });
-          })
-        )
-        .then(() => {
-          return _this.backend.end(transaction);
-        });
-    });
+    await this.backend.end(transaction);
+    const second_transaction = await this.backend.begin();
+    await bluebird.all(
+      resources.map(async (resource) => {
+        const bucket = allowsBucket(resource);
+        let { length } = await this.backend.get(bucket, role);
+
+        if (length == 0) {
+          await this.backend.remove(
+            second_transaction,
+            this.options.buckets.resources,
+            role,
+            resource
+          );
+        }
+      })
+    );
+    return await this.backend.end(second_transaction);
   }
 
   /**
@@ -466,8 +482,8 @@ export class Acl {
     @param {String|Array} resource(s) to ask permissions for.
     @param {Function} Callback called when finished.
   */
-  allowedPermissions(userId, resources) {
-    if (!userId) return cb(null, {});
+  async allowedPermissions(userId, resources) {
+    if (!userId) return {};
 
     // contract(arguments)
     //   .params("string|number", "string|array", "function")
@@ -475,28 +491,23 @@ export class Acl {
     //   .end();
 
     if (this.backend.unions) {
-      return this.optimizedAllowedPermissions(userId, resources);
+      return await this.optimizedAllowedPermissions(userId, resources);
     }
 
-    const _this = this;
     resources = makeArray(resources);
 
-    return _this.userRoles(userId).then((roles) => {
-      const result = {};
-      return bluebird
-        .all(
-          resources.map((resource) => {
-            return _this
-              ._resourcePermissions(roles, resource)
-              .then((permissions) => {
-                result[resource] = permissions;
-              });
-          })
-        )
-        .then(() => {
-          return result;
-        });
-    });
+    let roles = await this.userRoles(userId);
+    let result = {};
+
+    return await bluebird.all(
+      resources.map((resource) => {
+        return this._resourcePermissions(roles, resource).then(
+          (permissions) => {
+            result[resource] = permissions;
+          }
+        );
+      })
+    );
   }
 
   /**
@@ -514,40 +525,33 @@ export class Acl {
     @param {String|Array} resource(s) to ask permissions for.
     @param {Function} Callback called when finished.
   */
-  optimizedAllowedPermissions(userId, resources) {
+  async optimizedAllowedPermissions(userId, resources) {
     if (!userId) {
-      return cb(null, {});
+      return {};
     }
 
-    // contract(arguments)
-    //   .params("string|number", "string|array", "function|undefined")
-    //   .params("string|number", "string|array")
-    //   .end();
-
     resources = makeArray(resources);
-    const self = this;
 
-    return this._allUserRoles(userId)
-      .then((roles) => {
-        const buckets = resources.map(allowsBucket);
-        if (roles.length === 0) {
-          const emptyResult = {};
-          buckets.forEach((bucket) => {
-            emptyResult[bucket] = [];
-          });
-          return bluebird.resolve(emptyResult);
-        }
+    let roles = await this._allUserRoles(userId);
+    const buckets = resources.map(allowsBucket);
 
-        return self.backend.unions(buckets, roles);
-      })
-      .then((response) => {
-        const result = {};
-        Object.keys(response).forEach((bucket) => {
-          result[keyFromAllowsBucket(bucket)] = response[bucket];
-        });
-
-        return result;
+    let response = null;
+    if (roles.length === 0) {
+      const emptyResult = {};
+      buckets.forEach((bucket) => {
+        emptyResult[bucket] = [];
       });
+      response = await bluebird.resolve(emptyResult);
+    }
+
+    response = await this.backend.unions(buckets, roles);
+
+    const result = {};
+    Object.keys(response).forEach((bucket) => {
+      result[keyFromAllowsBucket(bucket)] = response[bucket];
+    });
+
+    return result;
   }
 
   /**
@@ -561,23 +565,18 @@ export class Acl {
     @param {String|Array} asked permissions.
     @param {Function} Callback called wish the result.
   */
-  isAllowed(userId, resource, permissions) {
+  async isAllowed(userId, resource, permissions) {
     // contract(arguments)
     //   .params("string|number", "string", "string|array", "function")
     //   .params("string|number", "string", "string|array")
     //   .end();
 
-    const _this = this;
-
-    return this.backend
-      .getAsync(this.options.buckets.users, userId)
-      .then((roles) => {
-        if (roles.length) {
-          return _this.areAnyRolesAllowed(roles, resource, permissions);
-        } else {
-          return false;
-        }
-      });
+    let roles = await this.backend.get(this.options.buckets.users, userId);
+    if (roles.length) {
+      return await this.areAnyRolesAllowed(roles, resource, permissions);
+    } else {
+      return false;
+    }
   }
 
   /**
@@ -590,7 +589,7 @@ export class Acl {
     @param {String|Array} asked permissions.
     @param {Function} Callback called with the result.
   */
-  areAnyRolesAllowed(roles, resource, permissions) {
+  async areAnyRolesAllowed(roles, resource, permissions) {
     // contract(arguments)
     //   .params("string|array", "string", "string|array", "function")
     //   .params("string|array", "string", "string|array")
@@ -600,9 +599,9 @@ export class Acl {
     permissions = makeArray(permissions);
 
     if (roles.length === 0) {
-      return bluebird.resolve(false);
+      return await bluebird.resolve(false);
     } else {
-      return this._checkPermissions(roles, resource, permissions);
+      return await this._checkPermissions(roles, resource, permissions);
     }
   }
 
@@ -619,7 +618,10 @@ export class Acl {
     @param {String|Array} Permissions
     @param {Function} Callback called wish the result.
   */
-  whatResources(roles, permissions) {
+  async whatResources(
+    roles: Roles | Role,
+    permissions?: Permissions | Permission
+  ) {
     // contract(arguments)
     //   .params("string|array")
     //   .params("string|array", "string|array")
@@ -628,158 +630,38 @@ export class Acl {
     //   .end();
 
     roles = makeArray(roles);
-    if (_.isFunction(permissions)) {
-      cb = permissions;
-      permissions = undefined;
-    } else if (permissions) {
+    // TODO: Accept permissions as functions
+    // if (_.isFunction(permissions)) {
+    //   cb = permissions;
+    //   permissions = undefined;
+    // } else
+    if (permissions) {
       permissions = makeArray(permissions);
     }
 
-    return this.permittedResources(roles, permissions);
+    return await this.permittedResources(roles, permissions);
   }
 
-  permittedResources(roles, permissions) {
-    const _this = this;
+  async permittedResources(roles, permissions) {
     const result = _.isUndefined(permissions) ? {} : [];
-    return this._rolesResources(roles).then((resources) => {
-      return bluebird
-        .all(
-          resources.map((resource) => {
-            return _this._resourcePermissions(roles, resource).then((p) => {
-              if (permissions) {
-                const commonPermissions = _.intersection(permissions, p);
-                if (commonPermissions.length > 0) {
-                  result.push(resource);
-                }
-              } else {
-                result[resource] = p;
-              }
-            });
-          })
-        )
-        .then(() => {
-          return result;
-        });
-    });
-  }
+    let resources = await this._rolesResources(roles);
 
-  /**
-    clean ()
-
-    Cleans all the keys with the given prefix from redis.
-
-    Note: this operation is not reversible!.
-  */
-  /*
-  Acl.prototype.clean = function(callback){
-    var acl = this;
-    this.redis.keys(this.prefix+'*', function(err, keys){
-      if(keys.length){
-        acl.redis.del(keys, function(err){
-          callback(err);
-        });
-      }else{
-        callback();
-      }
-    });
-  };
-  */
-
-  /**
-    Express Middleware
-
-  */
-  middleware(numPathComponents, userId, actions) {
-    // contract(arguments)
-    //   .params()
-    //   .params("number")
-    //   .params("number", "string|number|function")
-    //   .params("number", "string|number|function", "string|array")
-    //   .end();
-
-    const acl = this;
-
-    function HttpError(errorCode, msg) {
-      this.errorCode = errorCode;
-      this.message = msg;
-      this.name = this.constructor.name;
-
-      Error.captureStackTrace(this, this.constructor);
-      this.constructor.prototype.__proto__ = Error.prototype;
-    }
-
-    return (req, res, next) => {
-      let _userId = userId;
-      let _actions = actions;
-      let resource;
-      let url;
-
-      // call function to fetch userId
-      if (typeof userId === "function") {
-        _userId = userId(req, res);
-      }
-      if (!userId) {
-        if (req.session && req.session.userId) {
-          _userId = req.session.userId;
-        } else if (req.user && req.user.id) {
-          _userId = req.user.id;
-        } else {
-          next(new HttpError(401, "User not authenticated"));
-          return;
-        }
-      }
-
-      // Issue #80 - Additional check
-      if (!_userId) {
-        next(new HttpError(401, "User not authenticated"));
-        return;
-      }
-
-      url = req.originalUrl.split("?")[0];
-      if (!numPathComponents) {
-        resource = url;
-      } else {
-        resource = url
-          .split("/")
-          .slice(0, numPathComponents + 1)
-          .join("/");
-      }
-
-      if (!_actions) {
-        _actions = req.method.toLowerCase();
-      }
-
-      acl.logger
-        ? acl.logger.debug(
-            `Requesting ${_actions} on ${resource} by user ${_userId}`
-          )
-        : null;
-
-      acl.isAllowed(_userId, resource, _actions, (err, allowed) => {
-        if (err) {
-          next(new Error("Error checking permissions to access resource"));
-        } else if (allowed === false) {
-          if (acl.logger) {
-            acl.logger.debug(
-              `Not allowed ${_actions} on ${resource} by user ${_userId}`
-            );
-            acl.allowedPermissions(_userId, resource, (err, obj) => {
-              acl.logger.debug(`Allowed permissions: ${util.inspect(obj)}`);
-            });
+    return await bluebird.all(
+      resources.map((resource) => {
+        return this._resourcePermissions(roles, resource).then((p) => {
+          if (permissions) {
+            const commonPermissions = _.intersection(permissions, p);
+            if (commonPermissions.length > 0) {
+              // TODO: Add test case
+              //@ts-ignore Property 'push' does not exist on type '{}'.ts(2339)
+              result.push(resource);
+            }
+          } else {
+            result[resource] = p;
           }
-          next(
-            new HttpError(403, "Insufficient permissions to access resource")
-          );
-        } else {
-          acl.logger
-            ? acl.logger.debug(
-                `Allowed ${_actions} on ${resource} by user ${_userId}`
-              )
-            : null;
-          next();
-        }
-      });
-    };
+        });
+      })
+    );
   }
 
   //-----------------------------------------------------------------------------
@@ -791,7 +673,7 @@ export class Acl {
   //
   // Same as allow but accepts a more compact input.
   //
-  private _allowEx(objs) {
+  private async _allowEx(objs) {
     const _this = this;
     objs = makeArray(objs);
 
@@ -807,7 +689,7 @@ export class Acl {
       });
     });
 
-    return bluebird.reduce(
+    return await bluebird.reduce(
       demuxed,
       (values, { roles, resources, permissions }) => {
         return _this.allow(roles, resources, permissions);
@@ -819,43 +701,14 @@ export class Acl {
   //
   // Returns the parents of the given roles
   //
-  private _rolesParents(roles) {
-    return this.backend.union(this.options.buckets.parents, roles);
+  private async _rolesParents(roles) {
+    return await this.backend.union(this.options.buckets.parents, roles);
   }
 
   //
   // Return all roles in the hierarchy including the given roles.
   //
-  /*
-  Acl.prototype._allRoles = function(roleNames, cb){
-    var _this = this, roles;
-
-    _this._rolesParents(roleNames, function(err, parents){
-      roles = _.union(roleNames, parents);
-      async.whilst(
-        function (){
-          return parents.length >0;
-        },
-        function (cb) {
-          _this._rolesParents(parents, function(err, result){
-            if(!err){
-              roles = _.union(roles, parents);
-              parents = result;
-            }
-            cb(err);
-          });
-        },
-        function(err){
-          cb(err, roles);
-        }
-      );
-    });
-  };
-  */
-  //
-  // Return all roles in the hierarchy including the given roles.
-  //
-  private _allRoles(roleNames) {
+  private async _allRoles(roleNames) {
     const _this = this;
 
     return this._rolesParents(roleNames).then((parents) => {
@@ -872,12 +725,12 @@ export class Acl {
   //
   // Return all roles in the hierarchy of the given user.
   //
-  private _allUserRoles(userId) {
+  private async _allUserRoles(userId) {
     const _this = this;
 
-    return this.userRoles(userId).then((roles) => {
+    return this.userRoles(userId).then(async (roles) => {
       if (roles && roles.length > 0) {
-        return _this._allRoles(roles);
+        return await _this._allRoles(roles);
       } else {
         return [];
       }
@@ -887,8 +740,7 @@ export class Acl {
   //
   // Returns an array with resources for the given roles.
   //
-  private _rolesResources(roles) {
-    const _this = this;
+  private async _rolesResources(roles) {
     roles = makeArray(roles);
 
     return this._allRoles(roles).then((allRoles) => {
@@ -898,8 +750,8 @@ export class Acl {
       return bluebird
         .all(
           allRoles.map((role) => {
-            return _this.backend
-              .getAsync(_this.options.buckets.resources, role)
+            return this.backend
+              .get(this.options.buckets.resources, role)
               .then((resources) => {
                 result = result.concat(resources);
               });
@@ -914,22 +766,20 @@ export class Acl {
   //
   // Returns the permissions for the given resource and set of roles
   //
-  private _resourcePermissions(roles, resource) {
-    const _this = this;
-
+  private async _resourcePermissions(roles, resource) {
     if (roles.length === 0) {
       return bluebird.resolve([]);
     } else {
       return this.backend
-        .unionAsync(allowsBucket(resource), roles)
+        .union(allowsBucket(resource), roles)
         .then((resourcePermissions) => {
-          return _this._rolesParents(roles).then((parents) => {
+          return this._rolesParents(roles).then((parents) => {
             if (parents && parents.length) {
-              return _this
-                ._resourcePermissions(parents, resource)
-                .then((morePermissions) => {
+              return this._resourcePermissions(parents, resource).then(
+                (morePermissions) => {
                   return _.union(resourcePermissions, morePermissions);
-                });
+                }
+              );
             } else {
               return resourcePermissions;
             }
@@ -941,11 +791,9 @@ export class Acl {
   //
   // NOTE: This function will not handle circular dependencies and result in a crash.
   //
-  private _checkPermissions(roles, resource, permissions) {
-    const _this = this;
-
+  private async _checkPermissions(roles, resource, permissions) {
     return this.backend
-      .unionAsync(allowsBucket(resource), roles)
+      .union(allowsBucket(resource), roles)
       .then((resourcePermissions) => {
         if (resourcePermissions.includes("*")) {
           return true;
@@ -957,15 +805,11 @@ export class Acl {
           if (permissions.length === 0) {
             return true;
           } else {
-            return _this.backend
-              .unionAsync(_this.options.buckets.parents, roles)
+            return this.backend
+              .union(this.options.buckets.parents, roles)
               .then((parents) => {
                 if (parents && parents.length) {
-                  return _this._checkPermissions(
-                    parents,
-                    resource,
-                    permissions
-                  );
+                  return this._checkPermissions(parents, resource, permissions);
                 } else {
                   return false;
                 }

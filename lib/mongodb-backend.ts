@@ -3,10 +3,9 @@
   Implementation of the storage backend using MongoDB
 */
 
-import async from "async";
 import _ from "lodash";
-import Backend from "./backend";
 import { Db as MongoDB } from "mongodb";
+import Backend from "./backend";
 
 // Name of the collection where meta and allowsXXX are stored.
 // If prefix is specified, it will be prepended to this name, like acl_resources
@@ -42,8 +41,11 @@ export class MongoDBBackend implements Backend {
      Ends a transaction (and executes it)
   */
   async end(transaction) {
+    // const session = client.startSession();
+    // await session.withTransaction(async () => {})
+
     // contract(arguments).params("array", "function").end();
-    await async.series(transaction);
+    await Promise.all(transaction);
   }
 
   /**
@@ -76,25 +78,34 @@ export class MongoDBBackend implements Backend {
       : { key };
     const collName = this.useSingle ? aclCollectionName : bucket;
 
-    this.db.collection(
-      this.prefix + this.removeUnsupportedChar(collName),
-      (err, collection) => {
-        if (err instanceof Error) return cb(err);
-        // Excluding bucket field from search result
-        collection.findOne(searchParams, { _bucketname: 0 }, (err, doc) => {
-          if (err) return cb(err);
-          if (!_.isObject(doc)) return cb(undefined, []);
-          doc = fixKeys(doc);
-          cb(undefined, _.without(_.keys(doc), "key", "_id"));
-        });
-      }
-    );
+    return await new Promise((resolve, reject) => {
+      this.db.collection(
+        this.prefix + this.removeUnsupportedChar(collName),
+        (err, collection) => {
+          if (err instanceof Error) reject(err);
+
+          // Excluding bucket field from search result
+          collection.findOne(
+            searchParams,
+            // @ts-ignore
+            { _bucketname: 0 },
+            (err, doc) => {
+              if (err) return reject(err);
+              if (!_.isObject(doc)) return resolve([]);
+              doc = fixKeys(doc);
+
+              resolve(_.without(_.keys(doc), "key", "_id"));
+            }
+          );
+        }
+      );
+    });
   }
 
   /**
     Returns the union of the values in the given keys.
   */
-  union(bucket, keys, cb) {
+  async union(bucket, keys) {
     // contract(arguments).params("string", "array", "function").end();
     keys = encodeAll(keys);
     const searchParams = this.useSingle
@@ -102,32 +113,36 @@ export class MongoDBBackend implements Backend {
       : { key: { $in: keys } };
     const collName = this.useSingle ? aclCollectionName : bucket;
 
-    this.db.collection(
-      this.prefix + this.removeUnsupportedChar(collName),
-      (err, collection) => {
-        if (err instanceof Error) return cb(err);
-        // Excluding bucket field from search result
-        collection
-          .find(searchParams, { _bucketname: 0 })
-          .toArray((err, docs) => {
-            if (err instanceof Error) return cb(err);
-            if (!docs.length) return cb(undefined, []);
+    return await new Promise((resolve, reject) => {
+      this.db.collection(
+        this.prefix + this.removeUnsupportedChar(collName),
+        (err, collection) => {
+          if (err instanceof Error) return reject(err);
+          // Excluding bucket field from search result
+          collection
+            //@ts-ignore
+            .find(searchParams, { _bucketname: 0 })
+            .toArray((err, docs) => {
+              if (err instanceof Error) return reject(err);
+              if (!docs.length) return resolve([]);
 
-            const keyArrays = [];
-            docs = fixAllKeys(docs);
-            docs.forEach((doc) => {
-              keyArrays.push(..._.keys(doc));
+              const keyArrays = [];
+              docs = fixAllKeys(docs);
+              docs.forEach((doc) => {
+                keyArrays.push(..._.keys(doc));
+              });
+
+              resolve(_.without(_.union(keyArrays), "key", "_id"));
             });
-            cb(undefined, _.without(_.union(keyArrays), "key", "_id"));
-          });
-      }
-    );
+        }
+      );
+    });
   }
 
   /**
     Adds values to a given key inside a bucket.
   */
-  add(transaction, bucket, key, values) {
+  async add(transaction, bucket, key, values) {
     // contract(arguments)
     //   .params("array", "string", "string|number", "string|array|number")
     //   .end();
@@ -139,54 +154,60 @@ export class MongoDBBackend implements Backend {
       ? { _bucketname: bucket, key }
       : { key };
     const collName = self.useSingle ? aclCollectionName : bucket;
-    transaction.push((cb) => {
+
+    transaction.push(async (cb) => {
       values = makeArray(values);
-      self.db.collection(
-        self.prefix + self.removeUnsupportedChar(collName),
-        (err, collection) => {
-          if (err instanceof Error) return cb(err);
 
-          // build doc from array values
-          const doc = {};
-          values.forEach((value) => {
-            doc[value] = true;
-          });
+      return await new Promise((resolve, reject) => {
+        self.db.collection(
+          self.prefix + self.removeUnsupportedChar(collName),
+          (err, collection) => {
+            if (err instanceof Error) return reject(err);
 
-          // update document
-          collection.update(
-            updateParams,
-            { $set: doc },
-            { safe: true, upsert: true },
-            (err) => {
-              if (err instanceof Error) return cb(err);
-              cb(undefined);
-            }
-          );
-        }
-      );
+            // build doc from array values
+            const doc = {};
+            values.forEach((value) => {
+              doc[value] = true;
+            });
+
+            // update document
+            collection.updateMany(
+              updateParams,
+              { $set: doc },
+              { upsert: true },
+              (err) => {
+                if (err instanceof Error) return reject(err);
+                resolve(undefined);
+              }
+            );
+          }
+        );
+      });
     });
 
-    transaction.push((cb) => {
-      self.db.collection(
-        self.prefix + self.removeUnsupportedChar(collName),
-        (err, collection) => {
-          // Create index
-          collection.ensureIndex({ _bucketname: 1, key: 1 }, (err) => {
-            if (err instanceof Error) {
-              return cb(err);
-            } else {
-              cb(undefined);
-            }
-          });
-        }
-      );
+    transaction.push(async (cb) => {
+      return await new Promise((resolve, reject) => {
+        self.db.collection(
+          self.prefix + self.removeUnsupportedChar(collName),
+          (err, collection) => {
+            // Create index
+            collection.createIndex({ _bucketname: 1, key: 1 }, (err) => {
+              if (err instanceof Error) {
+                return reject(err);
+              } else {
+                resolve();
+              }
+            });
+          }
+        );
+      });
     });
   }
 
   /**
      Delete the given key(s) at the bucket
   */
-  del(transaction, bucket, keys) {
+  async del(transaction, bucket, keys) {
     // contract(arguments).params("array", "string", "string|array").end();
     keys = makeArray(keys);
     const self = this;
@@ -195,24 +216,26 @@ export class MongoDBBackend implements Backend {
       : { key: { $in: keys } };
     const collName = self.useSingle ? aclCollectionName : bucket;
 
-    transaction.push((cb) => {
-      self.db.collection(
-        self.prefix + self.removeUnsupportedChar(collName),
-        (err, collection) => {
-          if (err instanceof Error) return cb(err);
-          collection.remove(updateParams, { safe: true }, (err) => {
-            if (err instanceof Error) return cb(err);
-            cb(undefined);
-          });
-        }
-      );
+    transaction.push(async (cb) => {
+      return await new Promise((resolve, reject) => {
+        self.db.collection(
+          self.prefix + self.removeUnsupportedChar(collName),
+          async (err, collection) => {
+            if (err instanceof Error) return reject(err);
+            await collection.deleteMany(updateParams, (err) => {
+              if (err instanceof Error) return reject(err);
+              resolve();
+            });
+          }
+        );
+      });
     });
   }
 
   /**
     Removes values from a given key inside a bucket.
   */
-  remove(transaction, bucket, key, values) {
+  async remove(transaction, bucket, key, values) {
     // contract(arguments)
     //   .params("array", "string", "string|number", "string|array|number")
     //   .end();
@@ -224,38 +247,37 @@ export class MongoDBBackend implements Backend {
     const collName = self.useSingle ? aclCollectionName : bucket;
 
     values = makeArray(values);
-    transaction.push((cb) => {
-      self.db.collection(
-        self.prefix + self.removeUnsupportedChar(collName),
-        (err, collection) => {
-          if (err instanceof Error) return cb(err);
+    transaction.push(async (cb) => {
+      return await new Promise((resolve, reject) => {
+        self.db.collection(
+          self.prefix + self.removeUnsupportedChar(collName),
+          (err, collection) => {
+            if (err instanceof Error) return reject(err);
 
-          // build doc from array values
-          const doc = {};
-          values.forEach((value) => {
-            doc[value] = true;
-          });
+            // build doc from array values
+            const doc = {};
+            values.forEach((value) => {
+              doc[value] = true;
+            });
 
-          // update document
-          collection.update(
-            updateParams,
-            { $unset: doc },
-            { safe: true, upsert: true },
-            (err) => {
-              if (err instanceof Error) return cb(err);
-              cb(undefined);
-            }
-          );
-        }
-      );
+            // update document
+            collection.updateMany(
+              updateParams,
+              { $unset: doc },
+              { upsert: true },
+              (err) => {
+                if (err instanceof Error) return reject(err);
+                resolve();
+              }
+            );
+          }
+        );
+      });
     });
   }
 
-  removeUnsupportedChar(text) {
-    if (
-      !this.useRawCollectionNames &&
-      (typeof text === "string" || text instanceof String)
-    ) {
+  removeUnsupportedChar(text: string) {
+    if (!this.useRawCollectionNames) {
       text = decodeURIComponent(text);
       text = text.replace(/[/\s]/g, "_"); // replaces slashes and spaces
     }
@@ -263,11 +285,9 @@ export class MongoDBBackend implements Backend {
   }
 }
 
-function encodeText(text) {
-  if (typeof text == "string" || text instanceof String) {
-    text = encodeURIComponent(text);
-    text = text.replace(/\./g, "%2E");
-  }
+function encodeText(text: string) {
+  text = encodeURIComponent(text);
+  text = text.replace(/\./g, "%2E");
   return text;
 }
 
