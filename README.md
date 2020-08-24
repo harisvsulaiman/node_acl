@@ -1,4 +1,4 @@
-# NODE ACL - Access Control Lists for Node
+# NODE ACL - Access Control Lists for Node (Typescript Version)
 
 This module provides a minimalistic ACL implementation inspired by Zend_ACL.
 
@@ -16,9 +16,7 @@ Follow [manast](http://twitter.com/manast) for news and updates regarding this l
 
 ## Status
 
-[![BuildStatus](https://secure.travis-ci.org/OptimalBits/node_acl.png?branch=master)](http://travis-ci.org/OptimalBits/node_acl)
-[![Dependency Status](https://david-dm.org/OptimalBits/node_acl.svg)](https://david-dm.org/OptimalBits/node_acl)
-[![devDependency Status](https://david-dm.org/OptimalBits/node_acl/dev-status.svg)](https://david-dm.org/OptimalBits/node_acl#info=devDependencies)
+![CI](https://github.com/cloodot/node_acl/workflows/CI/badge.svg?branch=develop)
 
 ## Features
 
