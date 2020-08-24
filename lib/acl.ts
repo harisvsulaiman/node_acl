@@ -362,7 +362,7 @@ export class Acl {
   */
 
   async allow(roles, resources, permissions) {
-    if ((!resources && !permissions) || (resources && _.isObject(roles))) {
+    if (!resources && !permissions) {
       return await this._allowEx(roles);
     } else {
       roles = makeArray(roles);
