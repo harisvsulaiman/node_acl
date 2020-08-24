@@ -71,7 +71,6 @@ export class MongoDBBackend implements Backend {
      Gets the contents at the bucket's key.
   */
   async get(bucket, key) {
-    // contract(arguments).params("string", "string|number", "function").end();
     key = encodeText(key);
     const searchParams = this.useSingle
       ? { _bucketname: bucket, key }
@@ -106,12 +105,11 @@ export class MongoDBBackend implements Backend {
     Returns the union of the values in the given keys.
   */
   async union(bucket, keys) {
-    // contract(arguments).params("string", "array", "function").end();
     keys = encodeAll(keys);
     const searchParams = this.useSingle
       ? { _bucketname: bucket, key: { $in: keys } }
       : { key: { $in: keys } };
-    const collName = this.useSingle ? aclCollectionName : bucket;
+    let collName = this.useSingle ? aclCollectionName : bucket;
 
     return await new Promise((resolve, reject) => {
       this.db.collection(
@@ -143,24 +141,20 @@ export class MongoDBBackend implements Backend {
     Adds values to a given key inside a bucket.
   */
   async add(transaction, bucket, key, values) {
-    // contract(arguments)
-    //   .params("array", "string", "string|number", "string|array|number")
-    //   .end();
-
     if (key == "key") throw new Error("Key name 'key' is not allowed.");
     key = encodeText(key);
-    const self = this;
-    const updateParams = self.useSingle
+
+    const updateParams = this.useSingle
       ? { _bucketname: bucket, key }
       : { key };
-    const collName = self.useSingle ? aclCollectionName : bucket;
+    const collName = this.useSingle ? aclCollectionName : bucket;
 
     transaction.push(async (cb) => {
       values = makeArray(values);
 
       return await new Promise((resolve, reject) => {
-        self.db.collection(
-          self.prefix + self.removeUnsupportedChar(collName),
+        this.db.collection(
+          this.prefix + this.removeUnsupportedChar(collName),
           (err, collection) => {
             if (err instanceof Error) return reject(err);
 
@@ -187,8 +181,8 @@ export class MongoDBBackend implements Backend {
 
     transaction.push(async (cb) => {
       return await new Promise((resolve, reject) => {
-        self.db.collection(
-          self.prefix + self.removeUnsupportedChar(collName),
+        this.db.collection(
+          this.prefix + this.removeUnsupportedChar(collName),
           (err, collection) => {
             // Create index
             collection.createIndex({ _bucketname: 1, key: 1 }, (err) => {
@@ -210,16 +204,16 @@ export class MongoDBBackend implements Backend {
   async del(transaction, bucket, keys) {
     // contract(arguments).params("array", "string", "string|array").end();
     keys = makeArray(keys);
-    const self = this;
-    const updateParams = self.useSingle
+
+    const updateParams = this.useSingle
       ? { _bucketname: bucket, key: { $in: keys } }
       : { key: { $in: keys } };
-    const collName = self.useSingle ? aclCollectionName : bucket;
+    const collName = this.useSingle ? aclCollectionName : bucket;
 
     transaction.push(async (cb) => {
       return await new Promise((resolve, reject) => {
-        self.db.collection(
-          self.prefix + self.removeUnsupportedChar(collName),
+        this.db.collection(
+          this.prefix + this.removeUnsupportedChar(collName),
           async (err, collection) => {
             if (err instanceof Error) return reject(err);
             await collection.deleteMany(updateParams, (err) => {
@@ -236,21 +230,18 @@ export class MongoDBBackend implements Backend {
     Removes values from a given key inside a bucket.
   */
   async remove(transaction, bucket, key, values) {
-    // contract(arguments)
-    //   .params("array", "string", "string|number", "string|array|number")
-    //   .end();
     key = encodeText(key);
-    const self = this;
-    const updateParams = self.useSingle
+
+    const updateParams = this.useSingle
       ? { _bucketname: bucket, key }
       : { key };
-    const collName = self.useSingle ? aclCollectionName : bucket;
+    const collName = this.useSingle ? aclCollectionName : bucket;
 
     values = makeArray(values);
     transaction.push(async (cb) => {
       return await new Promise((resolve, reject) => {
-        self.db.collection(
-          self.prefix + self.removeUnsupportedChar(collName),
+        this.db.collection(
+          this.prefix + this.removeUnsupportedChar(collName),
           (err, collection) => {
             if (err instanceof Error) return reject(err);
 

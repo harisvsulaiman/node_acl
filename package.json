@@ -35,6 +35,7 @@
     "ts-jest": "^26.2.0",
     "typescript": "^3.8.2"
   },
+  "publishConfig": { "registry": "https://npm.pkg.github.com/" },
   "scripts": {
     "test": "jest",
     "coverage": "jest --coverage",

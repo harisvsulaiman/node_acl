@@ -173,7 +173,7 @@ describe("allow admin to do anything", () => {
   });
 });
 
-describe.skip("Arguments in one array", () => {
+describe("Arguments in one array", () => {
   it("give role fumanchu an array of resources and permissions", async () => {
     let acl = new Acl(backend);
 

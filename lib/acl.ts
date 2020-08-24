@@ -29,7 +29,6 @@
       a resource, then he can get exclusive write operation on the locked resource.
       This lock should expire if the resource has not been accessed in some time.
 */
-import bluebird from "bluebird";
 import _ from "lodash";
 import Backend from "./backend";
 
@@ -86,7 +85,7 @@ export class Acl {
     @return {Promise} Promise resolved when finished
   */
   async addUserRoles(userId: UserID, roles: Roles | Role) {
-    const transaction = await this.backend.begin();
+    let transaction = await this.backend.begin();
 
     await this.backend.add(
       transaction,
@@ -140,7 +139,7 @@ export class Acl {
     //   .params("string|number", "string|array")
     //   .end();
 
-    const transaction = await this.backend.begin();
+    let transaction = await this.backend.begin();
     await this.backend.remove(
       transaction,
       this.options.buckets.users,
@@ -225,7 +224,7 @@ export class Acl {
     //   .params("string|number", "string|array")
     //   .end();
 
-    const transaction = await this.backend.begin();
+    let transaction = await this.backend.begin();
     await this.backend.add(
       transaction,
       this.options.buckets.meta,
@@ -262,7 +261,7 @@ export class Acl {
     //   .params("string")
     //   .end();
 
-    const transaction = await this.backend.begin();
+    let transaction = await this.backend.begin();
     if (parents) {
       await this.backend.remove(
         transaction,
@@ -292,7 +291,7 @@ export class Acl {
       this.options.buckets.resources,
       role
     );
-    const transaction = await this.backend.begin();
+    let transaction = await this.backend.begin();
 
     resources.forEach(async (resource) => {
       const bucket = allowsBucket(resource);
@@ -328,7 +327,7 @@ export class Acl {
 
     let roles = await this.backend.get(this.options.buckets.meta, "roles");
 
-    const transaction = await this.backend.begin();
+    let transaction = await this.backend.begin();
     await this.backend.del(transaction, allowsBucket(resource), roles);
 
     roles.forEach(async (role) => {
@@ -363,25 +362,13 @@ export class Acl {
   */
 
   async allow(roles, resources, permissions) {
-    // contract(arguments)
-    //   .params("string|array", "string|array", "string|array", "function")
-    //   .params("string|array", "string|array", "string|array")
-    //   .params("array", "function")
-    //   .params("array")
-    //   .end();
-
-    // TODO: handle this case
-    if (
-      false
-      // arguments.length == 1 ||
-      // (arguments.length === 2 && _.isObject(roles) && _.isFunction(resources))
-    ) {
-      // return this._allowEx(roles).nodeify(resources);
+    if ((!resources && !permissions) || (resources && _.isObject(roles))) {
+      return await this._allowEx(roles);
     } else {
       roles = makeArray(roles);
       resources = makeArray(resources);
 
-      const transaction = await this.backend.begin();
+      let transaction = await this.backend.begin();
 
       await this.backend.add(
         transaction,
@@ -416,6 +403,8 @@ export class Acl {
 
   async removeAllow(role, resources, permissions) {
     resources = makeArray(resources);
+    permissions = makeArray(permissions);
+
     return await this.removePermissions(role, resources, permissions);
   }
 
@@ -431,7 +420,8 @@ export class Acl {
     @param {String|Array}
   */
   async removePermissions(role, resources, permissions) {
-    const transaction = await this.backend.begin();
+    let transaction = await this.backend.begin();
+
     resources.forEach(async (resource) => {
       const bucket = allowsBucket(resource);
 
@@ -451,8 +441,9 @@ export class Acl {
     // Remove resource from role if no rights for that role exists.
     // Not fully atomic...
     await this.backend.end(transaction);
+
     const second_transaction = await this.backend.begin();
-    await bluebird.all(
+    await Promise.all(
       resources.map(async (resource) => {
         const bucket = allowsBucket(resource);
         let { length } = await this.backend.get(bucket, role);
@@ -485,11 +476,6 @@ export class Acl {
   */
   async allowedPermissions(userId, resources) {
     if (!userId) return {};
-
-    // contract(arguments)
-    //   .params("string|number", "string|array", "function")
-    //   .params("string|number", "string|array")
-    //   .end();
 
     if (this.backend.unions) {
       return await this.optimizedAllowedPermissions(userId, resources);
@@ -541,7 +527,7 @@ export class Acl {
       buckets.forEach((bucket) => {
         emptyResult[bucket] = [];
       });
-      response = await bluebird.resolve(emptyResult);
+      response = emptyResult;
     }
 
     response = await this.backend.unions(buckets, roles);
@@ -566,11 +552,6 @@ export class Acl {
     @param {Function} Callback called wish the result.
   */
   async isAllowed(userId, resource, permissions) {
-    // contract(arguments)
-    //   .params("string|number", "string", "string|array", "function")
-    //   .params("string|number", "string", "string|array")
-    //   .end();
-
     let roles = await this.backend.get(this.options.buckets.users, userId);
     if (roles.length) {
       return await this.areAnyRolesAllowed(roles, resource, permissions);
@@ -590,16 +571,11 @@ export class Acl {
     @param {Function} Callback called with the result.
   */
   async areAnyRolesAllowed(roles, resource, permissions) {
-    // contract(arguments)
-    //   .params("string|array", "string", "string|array", "function")
-    //   .params("string|array", "string", "string|array")
-    //   .end();
-
     roles = makeArray(roles);
     permissions = makeArray(permissions);
 
     if (roles.length === 0) {
-      return await bluebird.resolve(false);
+      return false;
     } else {
       return await this._checkPermissions(roles, resource, permissions);
     }
@@ -623,11 +599,6 @@ export class Acl {
     permissions?: Permissions | Permission
   ) {
     roles = makeArray(roles);
-    // TODO: Accept permissions as functions
-    // if (_.isFunction(permissions)) {
-    //   cb = permissions;
-    //   permissions = undefined;
-    // } else
     if (permissions) {
       permissions = makeArray(permissions);
     }
@@ -675,7 +646,6 @@ export class Acl {
   // Same as allow but accepts a more compact input.
   //
   private async _allowEx(objs) {
-    const _this = this;
     objs = makeArray(objs);
 
     const demuxed = [];
@@ -690,13 +660,9 @@ export class Acl {
       });
     });
 
-    return await bluebird.reduce(
-      demuxed,
-      (values, { roles, resources, permissions }) => {
-        return _this.allow(roles, resources, permissions);
-      },
-      null
-    );
+    await demuxed.reduce(async (values, { roles, resources, permissions }) => {
+      return await this.allow(roles, resources, permissions);
+    }, Promise.resolve(null));
   }
 
   //
@@ -710,32 +676,27 @@ export class Acl {
   // Return all roles in the hierarchy including the given roles.
   //
   private async _allRoles(roleNames) {
-    const _this = this;
+    let parents = await this._rolesParents(roleNames);
 
-    return this._rolesParents(roleNames).then((parents) => {
-      if (parents.length > 0) {
-        return _this._allRoles(parents).then((parentRoles) => {
-          return _.union(roleNames, parentRoles);
-        });
-      } else {
-        return roleNames;
-      }
-    });
+    if (parents.length > 0) {
+      let parentRoles = await this._allRoles(parents);
+      return _.union(roleNames, parentRoles);
+    } else {
+      return roleNames;
+    }
   }
 
   //
   // Return all roles in the hierarchy of the given user.
   //
   private async _allUserRoles(userId) {
-    const _this = this;
+    let roles = await this.userRoles(userId);
 
-    return this.userRoles(userId).then(async (roles) => {
-      if (roles && roles.length > 0) {
-        return await _this._allRoles(roles);
-      } else {
-        return [];
-      }
-    });
+    if (roles && roles.length > 0) {
+      return await this._allRoles(roles);
+    } else {
+      return [];
+    }
   }
 
   //
@@ -744,24 +705,21 @@ export class Acl {
   private async _rolesResources(roles) {
     roles = makeArray(roles);
 
-    return this._allRoles(roles).then((allRoles) => {
-      let result = [];
+    let allRoles = await this._allRoles(roles);
+    let result = [];
 
-      // check if bluebird.map simplifies this code
-      return bluebird
-        .all(
-          allRoles.map((role) => {
-            return this.backend
-              .get(this.options.buckets.resources, role)
-              .then((resources) => {
-                result = result.concat(resources);
-              });
-          })
-        )
-        .then(() => {
-          return result;
-        });
-    });
+    await Promise.all(
+      allRoles.map(async (role) => {
+        let resources = await this.backend.get(
+          this.options.buckets.resources,
+          role
+        );
+
+        result = result.concat(resources);
+      })
+    );
+
+    return result;
   }
 
   //
@@ -769,23 +727,25 @@ export class Acl {
   //
   private async _resourcePermissions(roles, resource) {
     if (roles.length === 0) {
-      return bluebird.resolve([]);
+      return [];
     } else {
-      return this.backend
-        .union(allowsBucket(resource), roles)
-        .then((resourcePermissions) => {
-          return this._rolesParents(roles).then((parents) => {
-            if (parents && parents.length) {
-              return this._resourcePermissions(parents, resource).then(
-                (morePermissions) => {
-                  return _.union(resourcePermissions, morePermissions);
-                }
-              );
-            } else {
-              return resourcePermissions;
-            }
-          });
-        });
+      let resourcePermissions = await this.backend.union(
+        allowsBucket(resource),
+        roles
+      );
+
+      let parents = await this._rolesParents(roles);
+
+      if (parents && parents.length) {
+        let morePermissions = await this._resourcePermissions(
+          parents,
+          resource
+        );
+
+        return _.union(resourcePermissions, morePermissions);
+      } else {
+        return resourcePermissions;
+      }
     }
   }
 
@@ -793,31 +753,33 @@ export class Acl {
   // NOTE: This function will not handle circular dependencies and result in a crash.
   //
   private async _checkPermissions(roles, resource, permissions) {
-    return this.backend
-      .union(allowsBucket(resource), roles)
-      .then((resourcePermissions) => {
-        if (resourcePermissions.includes("*")) {
-          return true;
-        } else {
-          permissions = permissions.filter((p) => {
-            return !resourcePermissions.includes(p);
-          });
+    let resourcePermissions = await this.backend.union(
+      allowsBucket(resource),
+      roles
+    );
 
-          if (permissions.length === 0) {
-            return true;
-          } else {
-            return this.backend
-              .union(this.options.buckets.parents, roles)
-              .then((parents) => {
-                if (parents && parents.length) {
-                  return this._checkPermissions(parents, resource, permissions);
-                } else {
-                  return false;
-                }
-              });
-          }
-        }
+    if (resourcePermissions.includes("*")) {
+      return true;
+    } else {
+      permissions = permissions.filter((p) => {
+        return resourcePermissions.indexOf(p) === -1;
       });
+
+      if (permissions.length === 0) {
+        return true;
+      } else {
+        let parents = await this.backend.union(
+          this.options.buckets.parents,
+          roles
+        );
+
+        if (parents && parents.length) {
+          return await this._checkPermissions(parents, resource, permissions);
+        } else {
+          return false;
+        }
+      }
+    }
   }
 }
 
