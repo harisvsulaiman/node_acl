@@ -16,6 +16,7 @@ beforeAll(async () => {
     useUnifiedTopology: true,
   });
   db = await connection.db(DB);
+  console.log(MONGO_URL);
 
   await db.dropDatabase();
   backend = new MongoDBBackend(db, "acl");
